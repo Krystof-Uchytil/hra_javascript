@@ -2,102 +2,196 @@ const gameContainer = document.getElementById("game-container");
 const player = document.getElementById("player");
 const timeDisplay = document.getElementById("time");
 const livesDisplay = document.getElementById("lives");
+const pauseOverlay = document.getElementById("pause-overlay");
 
 let lives = 3;
-let time = 0;
+let totalSeconds = 0;
 let enemies = [];
-let intervalId;
+let spawnTimeout;
+let gameInterval;
+let collisionInterval;
+let isPaused = false;
+let isGameOver = false;
+let spawnDelay = 2000;
 
-// Pohyb hráče
+// Pohyb hráče podle myši
 gameContainer.addEventListener("mousemove", (e) => {
+    if (isPaused || isGameOver) return;
     const rect = gameContainer.getBoundingClientRect();
     const x = e.clientX - rect.left - player.offsetWidth / 2;
     const y = e.clientY - rect.top - player.offsetHeight / 2;
 
-    player.style.left = `${x}px`;
-    player.style.top = `${y}px`;
+    // Omezit pohyb na hranice herního pole
+    const maxX = gameContainer.offsetWidth - player.offsetWidth;
+    const maxY = gameContainer.offsetHeight - player.offsetHeight;
+
+    player.style.left = `${Math.min(Math.max(x, 0), maxX)}px`;
+    player.style.top = `${Math.min(Math.max(y, 0), maxY)}px`;
 });
 
-// Vytvoření nepřátel
+// Vytvoření nepřítele
 function spawnEnemy() {
+    if (isPaused || isGameOver) return;
+
     const enemy = document.createElement("div");
     enemy.classList.add("enemy");
     gameContainer.appendChild(enemy);
 
-    const size = Math.random() * 30 + 20;
+    const size = Math.random() * 30 + 50; // Velikost koule 50-80 px
     enemy.style.width = `${size}px`;
     enemy.style.height = `${size}px`;
 
-    const startX = Math.random() < 0.5 ? 0 : gameContainer.offsetWidth - size;
-    const startY = Math.random() * gameContainer.offsetHeight;
+    // Náhodný start na jedné straně herního pole
+    const edge = Math.floor(Math.random() * 4);
+    let startX, startY, endX, endY;
+
+    switch (edge) {
+        case 0: // Nahoře
+            startX = Math.random() * gameContainer.offsetWidth;
+            startY = -size;
+            endX = Math.random() * gameContainer.offsetWidth;
+            endY = gameContainer.offsetHeight + size;
+            break;
+        case 1: // Dole
+            startX = Math.random() * gameContainer.offsetWidth;
+            startY = gameContainer.offsetHeight + size;
+            endX = Math.random() * gameContainer.offsetWidth;
+            endY = -size;
+            break;
+        case 2: // Vlevo
+            startX = -size;
+            startY = Math.random() * gameContainer.offsetHeight;
+            endX = gameContainer.offsetWidth + size;
+            endY = Math.random() * gameContainer.offsetHeight;
+            break;
+        case 3: // Vpravo
+            startX = gameContainer.offsetWidth + size;
+            startY = Math.random() * gameContainer.offsetHeight;
+            endX = -size;
+            endY = Math.random() * gameContainer.offsetHeight;
+            break;
+    }
 
     enemy.style.left = `${startX}px`;
     enemy.style.top = `${startY}px`;
 
-    const speedX = Math.random() * 4 + 2;
-    const speedY = Math.random() * 4 - 2;
+    const duration = Math.random() * 3000 + 2000; // Pohyb trvá 2-5 sekund
+    enemy.animate(
+        [
+            { left: `${startX}px`, top: `${startY}px` },
+            { left: `${endX}px`, top: `${endY}px` },
+        ],
+        {
+            duration,
+            easing: "linear",
+            fill: "forwards",
+        }
+    ).onfinish = () => {
+        gameContainer.removeChild(enemy);
+        enemies = enemies.filter((e) => e !== enemy);
+    };
 
-    enemies.push({ element: enemy, x: startX, y: startY, dx: speedX, dy: speedY });
+    enemies.push(enemy);
+
+    // Další spawn
+    spawnDelay = Math.max(500, spawnDelay * 0.95); // Zkracuje interval
+    spawnTimeout = setTimeout(spawnEnemy, spawnDelay);
 }
 
-// Aktualizace pozic nepřátel
-function updateEnemies() {
-    enemies.forEach((enemy, index) => {
-        enemy.x += enemy.dx;
-        enemy.y += enemy.dy;
+// Funkce pro kontrolu kolizí
+function checkCollisions() {
+    if (isPaused || isGameOver) return;
 
-        if (enemy.x < 0 || enemy.x > gameContainer.offsetWidth - enemy.element.offsetWidth) {
-            enemy.dx *= -1;
-        }
-        if (enemy.y < 0 || enemy.y > gameContainer.offsetHeight - enemy.element.offsetHeight) {
-            enemy.dy *= -1;
-        }
+    const playerRect = player.getBoundingClientRect();
 
-        enemy.element.style.left = `${enemy.x}px`;
-        enemy.element.style.top = `${enemy.y}px`;
+    enemies.forEach((enemy) => {
+        const enemyRect = enemy.getBoundingClientRect();
 
-        // Kolize s hráčem
-        if (checkCollision(player, enemy.element)) {
-            lives -= 1;
+        // Kontrola kolize hráče s koulí
+        if (
+            playerRect.left < enemyRect.right &&
+            playerRect.right > enemyRect.left &&
+            playerRect.top < enemyRect.bottom &&
+            playerRect.bottom > enemyRect.top
+        ) {
+            // Snížení životů a odstranění koule
+            lives--;
             livesDisplay.textContent = lives;
-            gameContainer.removeChild(enemy.element);
-            enemies.splice(index, 1);
 
-            if (lives === 0) {
+            // Odebrat koulí z herního pole
+            enemy.remove();
+            enemies = enemies.filter((e) => e !== enemy);
+
+            // Kontrola konce hry
+            if (lives <= 0) {
                 endGame();
             }
         }
     });
 }
 
-// Kontrola kolize
-function checkCollision(rect1, rect2) {
-    const r1 = rect1.getBoundingClientRect();
-    const r2 = rect2.getBoundingClientRect();
+// Konec hry
+function endGame() {
+    isGameOver = true;
+    clearInterval(gameInterval);
+    clearTimeout(spawnTimeout);
+    clearInterval(collisionInterval);
+    pauseOverlay.style.display = "flex";
+    pauseOverlay.innerHTML = `
+    <p>Konec hry!</p>
+    <p>Čas přežití: ${Math.floor(totalSeconds / 60)}:${
+        totalSeconds % 60 < 10 ? "0" : ""
+    }${totalSeconds % 60}</p>
+    <p>Stiskněte F5 pro restart</p>
+  `;
+}
 
-    return !(
-        r1.right < r2.left ||
-        r1.left > r2.right ||
-        r1.bottom < r2.top ||
-        r1.top > r2.bottom
-    );
+// Pauza a obnovení hry
+document.addEventListener("keydown", (e) => {
+    if (e.key === " ") {
+        if (isPaused) {
+            resumeGame();
+        } else {
+            pauseGame();
+        }
+    }
+});
+
+function pauseGame() {
+    isPaused = true;
+    clearTimeout(spawnTimeout);
+    clearInterval(gameInterval);
+    clearInterval(collisionInterval);
+    pauseOverlay.style.display = "flex";
+    pauseOverlay.innerHTML = `
+    <p>Hra je pozastavena</p>
+    <p>Stiskněte mezerník pro pokračování</p>
+  `;
+}
+
+function resumeGame() {
+    isPaused = false;
+    pauseOverlay.style.display = "none";
+    spawnEnemy();
+    gameInterval = setInterval(updateTime, 1000);
+    collisionInterval = setInterval(checkCollisions, 50);
+}
+
+// Čas
+function updateTime() {
+    totalSeconds++;
+    timeDisplay.textContent = `${Math.floor(totalSeconds / 60)}:${
+        totalSeconds % 60 < 10 ? "0" : ""
+    }${totalSeconds % 60}`;
 }
 
 // Start hry
 function startGame() {
-    intervalId = setInterval(() => {
-        time += 1;
-        timeDisplay.textContent = time;
-        spawnEnemy();
-        updateEnemies();
-    }, 100);
-}
-
-// Konec hry
-function endGame() {
-    clearInterval(intervalId);
-    alert(`Konec hry! Přežil(a) jsi ${time} sekund.`);
-    location.reload();
+    spawnEnemy();
+    gameInterval = setInterval(updateTime, 1000);
+    collisionInterval = setInterval(checkCollisions, 50); // Kontrola každých 50 ms
 }
 
 startGame();
+
+

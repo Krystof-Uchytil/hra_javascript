@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="cs">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -9,11 +9,16 @@
 <body>
 <div id="game-container">
     <div id="player"></div>
+    <div id="pause-overlay">
+        <p>Hra je pozastavena</p>
+        <p>Stiskněte mezerník pro pokračování</p>
+    </div>
 </div>
 <div id="hud">
-    <p>Čas: <span id="time">0</span> s</p>
+    <p>Čas: <span id="time">0:00</span></p>
     <p>Životy: <span id="lives">3</span></p>
 </div>
 <script src="script.js"></script>
 </body>
 </html>
+

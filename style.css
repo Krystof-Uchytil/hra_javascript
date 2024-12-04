@@ -10,7 +10,6 @@ body {
     height: 100vh;
     overflow: hidden;
 }
-
 #game-container {
     position: relative;
     width: 600px;
@@ -19,7 +18,6 @@ body {
     overflow: hidden;
     border: 2px solid #61dafb;
 }
-
 #player {
     position: absolute;
     width: 30px;
@@ -29,14 +27,12 @@ body {
     box-sizing: border-box;
     border-radius: 5px;
 }
-
 .enemy {
     position: absolute;
     background-color: red;
     border: 3px solid yellow;
     border-radius: 50%;
 }
-
 #pause-overlay {
     position: absolute;
     top: 0;
@@ -52,10 +48,10 @@ body {
     font-size: 20px;
     display: none; /* Skryto, dokud není pauza */
 }
-
 #hud {
     display: flex;
     justify-content: space-between;
     width: 600px;
     margin-top: 10px;
 }
+
